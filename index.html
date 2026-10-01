@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>뛰뛰빵빵</title>
+<style>
+:root{--bg:#3a1f4d;--ink:#fff7fb;--pink:#ff8fb8;--btn:#2fa86b;--btn-ink:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#241231}}
+:root[data-theme="dark"]{--bg:#241231}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Jua","Malgun Gothic","Apple SD Gothic Neo",sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#stage{position:relative;border-radius:14px;overflow:hidden}
+canvas{width:100%;height:100%;display:block}
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;background:rgba(58,31,77,.72);padding:24px}
+.ov.hide{display:none}
+h1{margin:0;font-size:56px;color:#ffd1e3;text-shadow:0 4px 0 #b4417a}
+h2{margin:0;font-size:44px;color:#ffd1e3;text-shadow:0 3px 0 #b4417a}
+p{margin:0;font-size:18px;line-height:1.5}
+.big{font-size:30px;color:#fff}
+.plush{font-size:36px;letter-spacing:6px}
+button{font:inherit;font-size:24px;padding:12px 34px;border:0;border-radius:999px;background:var(--btn);color:var(--btn-ink);box-shadow:0 5px 0 #1b7a4a;cursor:pointer}
+button:active{transform:translateY(3px);box-shadow:0 2px 0 #1b7a4a}
+button:focus-visible{outline:3px solid #fff}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" width="360" height="640"></canvas>
+  <div class="ov" id="start">
+    <div class="plush">🧸🐰🦊🐸🐵</div>
+    <h1>뛰뛰빵빵</h1>
+    <p>차도에서 인형 장애물을 피해 달려요!<br>💗 하트를 먹으면 10점 + 빈 하트가 채워져요</p>
+    <p>PC: ← → 키 또는 마우스 클릭<br>폰: 화면 왼쪽/오른쪽 터치</p>
+    <button id="startBtn">시작하기</button>
+  </div>
+  <div class="ov hide" id="over">
+    <h2>게임 오버</h2>
+    <p class="big" id="final"></p>
+    <button id="retryBtn">다시 하기</button>
+  </div>
+</div>
+<script>
+(function(){
+var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var stage=document.getElementById('stage');
+var W=360,H=640,ROAD=45,LW=90,CARY=520;
+function fit(){
+  var s=Math.min(window.innerWidth/W,window.innerHeight/H);
+  stage.style.width=Math.floor(W*s)+'px';stage.style.height=Math.floor(H*s)+'px';
+  stage.style.fontSize=(s*16)+'px';
+  stage.querySelectorAll('.ov').forEach(function(o){o.style.zoom='';});
+}
+window.addEventListener('resize',fit);fit();
+function laneX(i){return ROAD+LW*i+LW/2;}
+
+var PLUSH=['🧸','🐰','🦊','🐸','🐵'];
+var st='ready',lives,score,streak,speed,t,gap,dist,items,lane,carX,hurt,toast,roadOff;
+
+function reset(){
+  lives=3;score=0;streak=0;speed=230;t=0;dist=0;items=[];sc=0;safe=1;lane=1;carX=laneX(1);hurt=0;toast=0;roadOff=0;
+}
+var sc=0,safe=1;
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function ob(l){items.push({k:'ob',e:pick(PLUSH),x:laneX(l),y:-40});}
+function spawn(){
+  sc++;
+  if(sc>=(lives<3?4:7)){sc=0;items.push({k:'heart',x:laneX(pick([0,1,2])),y:-40});return;}
+  var two=Math.random()<Math.min(0.55,t/90);
+  if(two){
+    var f=pick([0,1,2].filter(function(l){return Math.abs(l-safe)<=1;}));
+    [0,1,2].forEach(function(l){if(l!==f)ob(l);});
+    safe=f;
+  }else{
+    var o=pick([0,1,2]);
+    ob(o);
+    safe=pick([0,1,2].filter(function(l){return l!==o&&Math.abs(l-safe)<=1;}));
+  }
+}
+function update(dt){
+  t+=dt;roadOff=(roadOff+speed*dt)%60;
+  if(hurt>0)hurt-=dt;if(toast>0)toast-=dt;
+  carX+=(laneX(lane)-carX)*Math.min(1,dt*16);
+  gap=Math.max(150,speed*0.45,330-t*4);
+  dist+=speed*dt;
+  if(dist>=gap){dist=0;spawn();}
+  for(var i=items.length-1;i>=0;i--){
+    var it=items[i];it.y+=speed*dt;
+    if(Math.abs(it.x-carX)<38&&Math.abs(it.y-CARY)<50){
+      items.splice(i,1);
+      if(it.k==='heart'){score+=10;if(lives<3)lives++;}
+      else{lives--;streak=0;hurt=0.8;if(lives<=0){end();return;}}
+    }else if(it.y>H+40){
+      items.splice(i,1);
+      if(it.k==='ob'){streak++;if(streak%10===0){speed+=45;toast=1.3;}}
+    }
+  }
+}
+function end(){
+  st='over';
+  document.getElementById('final').textContent='점수: '+score+'점';
+  document.getElementById('over').classList.remove('hide');
+}
+function start(){
+  reset();st='play';
+  document.getElementById('start').classList.add('hide');
+  document.getElementById('over').classList.add('hide');
+}
+function move(d){if(st==='play')lane=Math.max(0,Math.min(2,lane+d));}
+
+function txt(s,x,y,size,col,al){
+  ctx.font='bold '+size+'px "Jua","Malgun Gothic","Apple SD Gothic Neo",sans-serif';
+  ctx.textAlign=al||'left';ctx.textBaseline='middle';ctx.fillStyle=col;ctx.fillText(s,x,y);
+}
+function emoji(e,x,y,sz){
+  ctx.font=sz+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y);
+}
+function rr(x,y,w,h,r,col){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();ctx.fillStyle=col;ctx.fill();
+}
+function drawCar(x,y){
+  rr(x-26,y-22,10,18,4,'#2a1a33');rr(x+16,y-22,10,18,4,'#2a1a33');
+  rr(x-26,y+16,10,18,4,'#2a1a33');rr(x+16,y+16,10,18,4,'#2a1a33');
+  rr(x-22,y-40,44,80,14,'#2fa86b');
+  rr(x-16,y-26,32,18,6,'#bfefff');
+  rr(x-16,y+8,32,14,5,'#bfefff');
+  rr(x-9,y-8,18,16,4,'#27935c');
+  ctx.fillStyle='#fff3a0';ctx.beginPath();ctx.arc(x-14,y-38,4,0,7);ctx.arc(x+14,y-38,4,0,7);ctx.fill();
+  ctx.fillStyle='#ff5a7a';ctx.fillRect(x-18,y+37,8,3);ctx.fillRect(x+10,y+37,8,3);
+}
+function draw(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#ff7eb3');g.addColorStop(.55,'#ffb199');g.addColorStop(1,'#ffd9a8');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,247,200,.85)';ctx.beginPath();ctx.arc(60,110,38,0,7);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.55)';
+  [[300,70,28],[320,80,22],[280,84,22],[40,300,22],[22,310,16],[62,312,18],[330,420,20],[312,430,15]].forEach(function(c){ctx.beginPath();ctx.arc(c[0],c[1],c[2],0,7);ctx.fill();});
+  rr(ROAD-8,-10,LW*3+16,H+20,0,'#fff3f8');
+  ctx.fillStyle='#4b3558';ctx.fillRect(ROAD,0,LW*3,H);
+  ctx.fillStyle='#ffe9a8';
+  for(var l=1;l<3;l++)for(var y=-60+roadOff;y<H;y+=60)ctx.fillRect(ROAD+LW*l-2,y,4,32);
+  items.forEach(function(it){
+    if(it.k==='heart')emoji('💗',it.x,it.y,38);else emoji(it.e,it.x,it.y,46);
+  });
+  if(!(hurt>0&&Math.floor(hurt*14)%2===0))drawCar(carX,CARY);
+  rr(8,8,W-16,44,12,'rgba(58,31,77,.6)');
+  txt('점수 '+score,20,30,22,'#fff');
+  for(var h=0;h<3;h++){ctx.globalAlpha=h<lives?1:0.25;emoji('❤️',W-88+h*30,31,24);}ctx.globalAlpha=1;
+  txt('연속 피하기 '+(streak%10)+'/10',W/2,76,16,'#fff','center');
+  if(toast>0)txt('속도 UP! 🚀',W/2,200,36,'#fff','center');
+}
+var last=0;
+function loop(ts){
+  var dt=Math.min(0.05,(ts-last)/1000||0);last=ts;
+  if(st==='play')update(dt);
+  if(st!=='ready'||true)draw();
+  requestAnimationFrame(loop);
+}
+reset();requestAnimationFrame(loop);
+
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('retryBtn').addEventListener('click',start);
+window.addEventListener('keydown',function(e){
+  var k=e.key;
+  if(k==='ArrowLeft'||k==='a'||k==='A'){move(-1);e.preventDefault();}
+  else if(k==='ArrowRight'||k==='d'||k==='D'){move(1);e.preventDefault();}
+  else if((k==='Enter'||k===' ')&&st!=='play'){start();e.preventDefault();}
+});
+cv.addEventListener('pointerdown',function(e){
+  var r=cv.getBoundingClientRect();
+  move(e.clientX-r.left<r.width/2?-1:1);
+});
+})();
+</script>
+</body>
+</html>
